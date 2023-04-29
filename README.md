@@ -3,6 +3,8 @@
 
 ## Study 1: In the context of the 2018 gun control movement in the U.S., we analyzed Facebook URLs Share data to see (1) how the focus of media coverage has evolved over about a year-long span, and (2) to examine how different types of information actors focus on which aspects of the movement. 
 
+## PUBLICATION CITATION: Kwon, K. H., Shao, C., Walker, S., Vinay, T. (2022). Mobilizing consensus on Facebook: Networked framing of the U.S. gun-control movement on Facebook.Proceedings of the 55th Hawaii International Conference on System Science (HICSS, pp.3232-3241), January 4—7, Hawaii, USA .  http://hdl.handle.net/10125/79730 
+
 ### Data sources: FB URL Attribute table and Breakdown table; MFOL-related Search Keyword list, Media Type table, Human-Coded Information Type table. 
 ### We only share the text network analysis related data and codes. 
 ### Research Questions:  
