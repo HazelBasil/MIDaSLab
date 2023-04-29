@@ -30,34 +30,6 @@ library(network) #to create network objects
 library(sna) #for network analysis
 ```
 
-##### Join the raw url file with the media type coded file 
-```{r}
-rawurl <- read.csv("filtered_urls sans protest from april_raw.csv")
-mediatype <- read.csv("MediaTypes.csv")
-head(rawurl)
-head(mediatype)
-
-allurl <- rawurl %>%
-  left_join(mediatype, by=c("parent_domain" = "parent_domain") )
-head(allurl)
-allurl[20000:20100,] #to check if the joining went ok.
-
-allurl <- allurl %>% 
-  distinct() %>% # remove duplicate rows in a data frame 
-  rowid_to_column("id") ##using rowid_to_column("") to add a column. 
-
-allurl = subset(allurl, select = -c(X) )   #not sure how "X" column was created but I removed it.  
-summary(allurl)
-
-write.csv(allurl, "HICSS.urls.mediatype.csv")
-
-rm(mediatype) #no needed any more, so remove it
-rm(rawurl) # no needed any more, so remove it
-
-frq = table(allurl$Categorical..1..traditioanl..2.online.partisan..3.nonpartisan.online.outlet...4..advocacy.realted.organizational..5..socialmedia.aggregate.channel..6.none.)
-frq
-```
-
 
 ##### NODE LIST: The node list is the same across all media type-edgelists. Thus we use the same node list. 
 ##### For some reason, weighted graph is not properly created. I decided to binarize the network by usign the edge weight cutoff point of 50 (meaning, at least 50 documents should contain the edge.)
