@@ -1,0 +1,334 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+plot(cars)
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+==========================================================================================
+#### QAP/CORRELATION Test by using "network" and "sna" #####
+==========================================================================================
+```{r}
+
+##Creating network object. reference : https://www.jessesadler.com/post/network-analysis-with-r/ ## 
+##Correlation/QAP test. reference: https://github.com/kateto/Network_Analysis_R_Examples/blob/master/R%20Scripts/Comm645-MRQAP.R
+
+library(tidyverse) # tidyverse to import and manipulate the data 
+library(network) #to create network objects
+library(sna) #for network analysis
+```
+
+##### Join the raw url file with the media type coded file 
+```{r}
+rawurl <- read.csv("filtered_urls sans protest from april_raw.csv")
+mediatype <- read.csv("MediaTypes.csv")
+head(rawurl)
+head(mediatype)
+
+allurl <- rawurl %>%
+  left_join(mediatype, by=c("parent_domain" = "parent_domain") )
+head(allurl)
+allurl[20000:20100,] #to check if the joining went ok.
+
+allurl <- allurl %>% 
+  distinct() %>% # remove duplicate rows in a data frame 
+  rowid_to_column("id") ##using rowid_to_column("") to add a column. 
+
+allurl = subset(allurl, select = -c(X) )   #not sure how "X" column was created but I removed it.  
+summary(allurl)
+
+write.csv(allurl, "HICSS.urls.mediatype.csv")
+
+rm(mediatype) #no needed any more, so remove it
+rm(rawurl) # no needed any more, so remove it
+
+frq = table(allurl$Categorical..1..traditioanl..2.online.partisan..3.nonpartisan.online.outlet...4..advocacy.realted.organizational..5..socialmedia.aggregate.channel..6.none.)
+frq
+```
+
+
+##### NODE LIST: The node list is the same across all media type-edgelists. Thus we use the same node list. 
+##### For some reason, weighted graph is not properly created. I decided to binarize the network by usign the edge weight cutoff point of 50 (meaning, at least 50 documents should contain the edge.)
+
+```{r}
+nodes <- read.csv("NodeList.csv")
+nodes <- nodes %>% 
+  rowid_to_column("id")   ##using rowid_to_column("") to add a column.  ## Regarding %>%, see https://uc-r.github.io/pipe 
+class(nodes$label)
+nodes$label <- as.character(nodes$label) ##changed the factor variable to character.
+
+nodes_labelonly <- select(nodes, id, label) ##the list with only label (and ID)
+
+head(nodes)
+class(nodes)
+
+```
+
+###### NETWORK OBJECT CREATION
+##### Create Node and Edgelist (First, create the Traditional media network object) 
+```{r}
+traditional <- read.csv("traditional_binary(50).csv")  #read the edgelist file.
+head(traditional)
+class(traditional)
+
+
+#left_join() with e_traditional  as the left data frame because I need to maintain the number of rows in the e_traditional (edgelist). Also, rename "from" and "to" columns by using "id" brought from the "nodes" data frame.
+e_traditional <- traditional %>%
+  left_join(nodes, by = c("from" = "label")) %>%  
+  rename(fromid = id) 
+e_traditional <- e_traditional %>%
+  left_join(nodes, by = c("to" = "label")) %>%  
+  rename(toid = id)
+
+head(e_traditional)
+
+#Select only the necessary columns to create a final edgelist (from, to, weight) 
+e_traditional <- select(e_traditional, fromid, toid, weight) %>%
+  arrange(fromid, toid)
+  
+class(e_traditional)
+head(e_traditional)
+rm(traditional) #remove the original edgelist file to simplify the environment.
+
+
+#Create the network object using "e_traditional" and "nodes" 
+net_traditional <- network.initialize(255)
+net_traditional <- network.edgelist(e_traditional, net_traditional, vertex.attr = nodes, directed = FALSE, matrix.type = "edgelist", ignore.eval=FALSE, names.eval="weight") ## Supposedly, by setting "ignore.eval to FALSE"  the network should be weighted and take into account the values in "weight". This did not happen for some reason. This is why I decided to use a binary edgelist that only included the edges with weight >=50
+
+net_traditional[1:30, 1:30]
+net_traditional
+
+#Instead, I can create a valued sociomatrix by using "as.sociomatrix"     
+## For the current analysis, I did not include this part. Rather, I only considered analyzing the binarized networks. 
+valnet_traditional <- as.sociomatrix(net_traditional, attrname='weight')
+valnet_traditional[1:15, 1:15]
+rm(valnet_traditional)
+
+```
+
+#### Repeate the above process to create other network objects for partisan, nonpartisan, org & social media. 
+
+```{r}
+#####PARTISAN EDGELIST & NETWORK OBJECT
+partisan <- read.csv("partisan_binary(50).csv")  
+
+e_partisan<- partisan %>%
+  left_join(nodes, by = c("from" = "label")) %>%  
+  rename(fromid = id) 
+e_partisan <- e_partisan %>%
+  left_join(nodes, by = c("to" = "label")) %>%  
+  rename(toid = id)
+
+#Select only the necessary columns to create a final edgelist (from, to, weight) 
+e_partisan <- select(e_partisan, fromid, toid, weight) %>%
+  arrange(fromid, toid)
+rm(partisan) #remove the original edgelist file to simplify the environment.
+
+#Create the network object using "e_partisan" and "nodes" 
+net_partisan <- network.initialize(255)
+net_partisan<- network.edgelist(e_partisan, net_partisan, vertex.attr = nodes, directed = FALSE, matrix.type = 'edgelist', ignore.eval=FALSE, names.eval='weight') ## Supposedly, by setting "ignore.eval to FALSE"  the network should be weighted and take into account the values in "weight". This did not happen for some reason. This is why I decided to use a binary edgelist that only included the edges with weight >=50
+
+#===================================================================
+
+#####NONPARTISAN EDGELIST & NETWORK OBJECT
+nonpartisan <- read.csv("nonpartisan_binary(50).csv")  
+
+e_nonpartisan<- nonpartisan %>%
+  left_join(nodes, by = c("from" = "label")) %>%  
+  rename(fromid = id) 
+e_nonpartisan <- e_nonpartisan %>%
+  left_join(nodes, by = c("to" = "label")) %>%  
+  rename(toid = id)
+
+#Select only the necessary columns to create a final edgelist (from, to, weight) 
+e_nonpartisan <- select(e_nonpartisan, fromid, toid, weight) %>%
+  arrange(fromid, toid)
+rm(nonpartisan) #remove the original edgelist file to simplify the environment.
+
+#Create the network object using "e_nonpartisan" and "nodes" 
+net_nonpartisan <- network.initialize(255)
+net_nonpartisan<- network.edgelist(e_nonpartisan,net_nonpartisan, vertex.attr = nodes, directed = FALSE, matrix.type = 'edgelist', ignore.eval=FALSE, names.eval='weight') ## Supposedly, by setting "ignore.eval to FALSE"  the network should be weighted and take into account the values in "weight". This did not happen for some reason. This is why I decided to use a binary edgelist that only included the edges with weight >=50
+
+#===================================================================
+
+#####ORG EDGELIST & NETWORK OBJECT
+org <- read.csv("org_binary(50).csv")  
+
+e_org <- org %>%
+  left_join(nodes, by = c("from" = "label")) %>%  
+  rename(fromid = id) 
+e_org <- e_org %>%
+  left_join(nodes, by = c("to" = "label")) %>%  
+  rename(toid = id)
+
+#Select only the necessary columns to create a final edgelist (from, to, weight) 
+e_org <- select(e_org, fromid, toid, weight) %>%
+  arrange(fromid, toid)
+rm(org) #remove the original edgelist file to simplify the environment.
+
+#Create the network object using "e_org" and "nodes" 
+net_org <- network.initialize(255)
+net_org <- network.edgelist(e_org, net_org, vertex.attr = nodes, directed = FALSE, matrix.type = 'edgelist', ignore.eval=FALSE, names.eval='weight') ## Supposedly, by setting "ignore.eval to FALSE"  the network should be weighted and take into account the values in "weight". This did not happen for some reason. This is why I decided to use a binary edgelist that only included the edges with weight >=50
+
+net_org
+#===================================================================
+
+#####SOCIAL MEDIA EDGELIST & NETWORK OBJECT
+socialmedia <- read.csv("socialmedia_binary(50).csv")  
+
+e_socialmedia <- socialmedia %>%
+  left_join(nodes, by = c("from" = "label")) %>%  
+  rename(fromid = id) 
+e_socialmedia <- e_socialmedia %>%
+  left_join(nodes, by = c("to" = "label")) %>%  
+  rename(toid = id)
+
+#Select only the necessary columns to create a final edgelist (from, to, weight) 
+e_socialmedia <- select(e_socialmedia, fromid, toid, weight) %>%
+  arrange(fromid, toid)
+rm(socialmedia) #remove the original edgelist file to simplify the environment.
+
+#Create the network object using "e_socialmedia" and "nodes" 
+net_socialmedia <- network.initialize(255)
+net_socialmedia <- network.edgelist(e_socialmedia, net_socialmedia, vertex.attr = nodes, directed = FALSE, matrix.type = 'edgelist', ignore.eval=FALSE, names.eval='weight')  ## Supposedly, by setting "ignore.eval to FALSE"  the network should be weighted and take into account the values in "weight". This did not happen for some reason. This is why I decided to use a binary edgelist that only included the edges with weight >=50
+
+
+```
+
+##### Rank Correlation Tests
+```{r}
+# Correlation of word freqeuncy among the 5 media using Spearman's rank correlation test
+corr_trad_partisan <- cor.test(x=nodes$traditional_frequency, y=nodes$online.partisan_frequency, method = 'spearman')
+
+corr_trad_nonpartisan <- cor.test(x=nodes$traditional_frequency, y=nodes$nonpartisan.online.outlet_frequency, method = 'spearman')
+
+corr_trad_sm<- cor.test(x=nodes$traditional_frequency, y=nodes$socialmedia_aggregate.channel_frequency, method = 'spearman')
+
+corr_trad_org <- cor.test(x=nodes$traditional_frequency, y=nodes$advocacy.realted.organizational_frequency, method = 'spearman')
+
+corr_partisan_nonpartisan <- cor.test(x=nodes$online.partisan_frequency, y=nodes$nonpartisan.online.outlet_frequency, method = 'spearman')
+
+corr_partisan_sm <- cor.test(x=nodes$online.partisan_frequency, y=nodes$socialmedia_aggregate.channel_frequency, method = 'spearman')
+
+corr_partisan_org <- cor.test(x=nodes$online.partisan_frequency, y=nodes$advocacy.realted.organizational_frequency, method = 'spearman')
+
+corr_nonpartisan_sm <- cor.test(x=nodes$nonpartisan.online.outlet_frequency, y=nodes$socialmedia_aggregate.channel_frequency, method = 'spearman')
+
+corr_nonpartisan_org <- cor.test(x=nodes$nonpartisan.online.outlet_frequency, y=nodes$advocacy.realted.organizational_frequency, method = 'spearman')
+
+corr_sm_org <- cor.test(x=nodes$socialmedia_aggregate.channel_frequency, y=nodes$advocacy.realted.organizational_frequency, method = 'spearman')
+
+#===============================================================================
+# Calculate centrality measures and store them in the ch.attr data frame:
+## For this study, we only concerned with degree centrality
+
+nodes$traditional_degree <- degree(net_traditional, gmode="digraph", cmode="freeman")  #total degree centrality 
+
+nodes$partisan_degree <- degree(net_partisan, gmode="digraph", cmode="freeman")  #total degree centrality 
+
+nodes$nonpartisan_degree <- degree(net_nonpartisan, gmode="digraph", cmode="freeman")  #total degree centrality 
+
+nodes$org_degree <- degree(net_org, gmode="digraph", cmode="freeman")  #total degree centrality 
+nodes$sm_degree <- degree(net_socialmedia, gmode="digraph", cmode="freeman")  #total degree centrality 
+
+#===============================================================================
+# Correlation of degree centrality among the 5 media using Spearman's rank correlation test
+
+corrdg_trad_partisan <- cor.test(x=nodes$traditional_degree, y=nodes$partisan_degree, method = 'spearman')
+
+corrdg_trad_nonpartisan <- cor.test(x=nodes$traditional_degree, y=nodes$nonpartisan_degree, method = 'spearman')
+
+corrdg_trad_sm<- cor.test(x=nodes$traditional_degree, y=nodes$sm_degree, method = 'spearman')
+
+corrdg_trad_org <- cor.test(x=nodes$traditional_degree, y=nodes$org_degree, method = 'spearman')
+
+corrdg_partisan_nonpartisan <- cor.test(x=nodes$partisan_degree, y=nodes$nonpartisan_degree, method = 'spearman')
+
+corrdg_partisan_sm <- cor.test(x=nodes$partisan_degree, y=nodes$sm_degree, method = 'spearman')
+
+corrdg_partisan_org <- cor.test(x=nodes$partisan_degree, y=nodes$org_degree, method = 'spearman')
+
+corrdg_nonpartisan_sm <- cor.test(x=nodes$nonpartisan_degree, y=nodes$sm_degree, method = 'spearman')
+
+corrdg_nonpartisan_org <- cor.test(x=nodes$nonpartisan_degree, y=nodes$org_degree, method = 'spearman')
+
+corrdg_sm_org <- cor.test(x=nodes$sm_degree, y=nodes$org_degree, method = 'spearman')
+
+#====================================================================================
+# Spearman coeffs into a data.frame via network.edgelist
+## Frequecy results put below the diagnol ; Degree results put above the diagonal
+corr <-data.frame(
+  traditional = c("", corr_trad_partisan$estimate,corr_trad_nonpartisan$estimate,
+                 corr_trad_sm$estimate, corr_trad_org$estimate),
+  partisan = c(corrdg_trad_partisan$estimate, "", corr_partisan_nonpartisan$estimate,
+             corr_partisan_sm$estimate, corr_partisan_org$estimate),
+  nonpartisan = c(corrdg_trad_nonpartisan$estimate, corrdg_partisan_nonpartisan$estimate, 
+                 "", corr_nonpartisan_sm$estimate, corr_nonpartisan_org$estimate),
+  sm = c(corrdg_trad_sm$estimate, corrdg_partisan_sm$estimate, 
+        corrdg_nonpartisan_sm$estimate, "" , corr_sm_org$estimate),
+  org = c(corrdg_trad_org$estimate, corrdg_partisan_org$estimate, 
+         corrdg_nonpartisan_org$estimate, corrdg_sm_org$estimate, "")  )
+
+#export to csv
+write.csv(corr, "frqcorrbelow_dgcorrabove.csv") 
+
+```
+
+##### QAP network correlation Tests
+```{r}
+qap_trad_partisan <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=1, g2=2)
+summary(qap_trad_partisan)
+plot(qap_trad_partisan) #the correlation is significant at the 0.05 alpha level. We know this because less than 5% the permuted networks - or in this case, almost all of them - exhibited correlation coefficients that were either, greater than, or less than that of the value we calculated for these networks.
+
+qap_trad_nonpartisan <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=1, g2=3)
+qap_trad_sm <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=1, g2=4)
+qap_trad_org <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=1, g2=5)
+
+qap_partisan_nonpartisan <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=2, g2=3)
+qap_partisan_sm <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=2, g2=4)
+qap_partisan_org <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=2, g2=5)
+
+qap_nonpartisan_sm <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=3, g2=4)
+qap_nonpartisan_org <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=3, g2=5)
+
+qap_sm_org <- qaptest(list(net_traditional, net_partisan, net_nonpartisan, net_socialmedia, net_org), gcor, g1=4, g2=5)
+
+qap <- data.frame(
+  traditional = c("", qap_trad_partisan$testval,qap_trad_nonpartisan$testval,
+                 qap_trad_sm$testval, qap_trad_org$testval),
+  partisan = c("", "", qap_partisan_nonpartisan$testval,
+             qap_partisan_sm$testval, qap_partisan_org$testval),
+  nonpartisan = c("", "", "", 
+                  qap_nonpartisan_sm$testval, qap_nonpartisan_org$testval),
+  sm = c("", "", "" , "" , corr_sm_org$estimate),
+  org = c("", "", "", "", "") )
+
+write.csv(qap, "qap.csv")
+
+```
+
+##### OPTIONAL (Not used in this projecT): QAP REGRESSION: example of traditional ~ a(organizational)
+
+```{r}
+nl <- netlm(net_traditional,  # Dependent variable/network
+          list(net_org), # List the independent variables/networks
+          reps=1000) 
+summary(nl)
+```
+          
+
+
+
+
