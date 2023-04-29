@@ -1,2 +1,1 @@
-# MIDaSLab
-MIDaS Lab Projects
+# Networked Gun Politics
